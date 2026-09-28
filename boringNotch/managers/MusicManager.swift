@@ -237,17 +237,20 @@ class MusicManager: ObservableObject {
         }
 
         let timeChanged = state.currentTime != self.elapsedTime
-        let durationChanged = state.duration != self.songDuration
         let playbackRateChanged = state.playbackRate != self.playbackRate
         let shuffleChanged = state.isShuffled != self.isShuffled
         let repeatModeChanged = state.repeatMode != self.repeatMode
         let volumeChanged = state.volume != self.volume
         
-        if state.title != self.songTitle {
+        if !state.title.isEmpty {
+            self.songTitle = state.title
+        } else if state.isPlaying {
             self.songTitle = state.title
         }
 
-        if state.artist != self.artistName {
+        if !state.artist.isEmpty {
+            self.artistName = state.artist
+        } else if state.isPlaying {
             self.artistName = state.artist
         }
 
@@ -259,7 +262,9 @@ class MusicManager: ObservableObject {
             self.elapsedTime = state.currentTime
         }
 
-        if durationChanged {
+        if state.duration > 0 {
+            self.songDuration = state.duration
+        } else if state.isPlaying {
             self.songDuration = state.duration
         }
 
@@ -544,8 +549,14 @@ class MusicManager: ObservableObject {
             debounceIdleTask = Task { [weak self] in
                 guard let self = self else { return }
                 try? await Task.sleep(for: .seconds(Defaults[.waitInterval]))
-                withAnimation {
-                    self.isPlayerIdle = !self.isPlaying
+                await MainActor.run {
+                    guard !self.isPlaying else { return }
+                    let hasPausedSession =
+                        self.songDuration > 0
+                        || (!self.songTitle.isEmpty && self.songTitle != "I'm Handsome")
+                    withAnimation {
+                        self.isPlayerIdle = !hasPausedSession
+                    }
                 }
             }
         }
@@ -642,13 +653,81 @@ class MusicManager: ObservableObject {
     }
 
     func seek(to position: TimeInterval) {
+        guard canSeek else { return }
+        let clamped: TimeInterval
+        if songDuration > 0 {
+            clamped = min(max(position, 0), songDuration)
+        } else {
+            clamped = max(position, 0)
+        }
+        // Optimistic update so the slider doesn't snap back to the stale
+        // adapter value while the seek propagates to the browser/player.
+        elapsedTime = clamped
+        timestampDate = Date()
         Task {
-            await activeController?.seek(to: position)
+            await activeController?.seek(to: clamped)
         }
     }
     func skip(seconds: TimeInterval) {
-        let newPos = min(max(0, elapsedTime + seconds), songDuration)
+        guard canSeek else { return }
+        let base = estimatedPlaybackPosition()
+        var newPos = max(0, base + seconds)
+        if songDuration > 0 {
+            newPos = min(newPos, songDuration)
+        }
+        elapsedTime = newPos
+        timestampDate = Date()
         seek(to: newPos)
+    }
+
+    private static let browserBundleIDs: Set<String> = [
+        "com.apple.Safari",
+        "com.apple.WebKit.GPU",
+        "com.apple.WebKit.WebContent",
+        "com.google.Chrome",
+        "com.google.Chrome.canary",
+        "org.mozilla.firefox",
+        "company.thebrowser.Browser",
+        "com.brave.Browser",
+        "com.microsoft.edgemac",
+        "com.operasoftware.Opera",
+    ]
+
+    /// Browser sources are seeked via AppleScript JavaScript injection
+    /// (see NowPlayingController); only Firefox, which has no such hook,
+    /// gets a read-only progress bar.
+    var canSeek: Bool {
+        if let controller = activeController {
+            return controller.supportsSeeking
+        }
+        return bundleIdentifier != "org.mozilla.firefox"
+    }
+
+    var usesBrowserStyleTransport: Bool {
+        guard let id = bundleIdentifier else { return false }
+        return Self.browserBundleIDs.contains(id)
+    }
+
+    func transportBackward() {
+        if usesBrowserStyleTransport {
+            skip(seconds: -15)
+        } else {
+            previousTrack()
+        }
+    }
+
+    func transportForward() {
+        if usesBrowserStyleTransport {
+            skip(seconds: 15)
+        } else {
+            nextTrack()
+        }
+    }
+
+    var hasActiveMediaSession: Bool {
+        let hasRealTitle = !songTitle.isEmpty && songTitle != "I'm Handsome"
+        let hasRealArtist = !artistName.isEmpty && artistName != "Me"
+        return isPlaying || !isPlayerIdle || songDuration > 0 || hasRealTitle || hasRealArtist
     }
     
     func setVolume(to level: Double) {

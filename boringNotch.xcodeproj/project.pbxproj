@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		24FC0DAF525FE3C5B3C41CBE /* Geist-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 75AC941799345F0154A5626D /* Geist-Bold.ttf */; };
+		085CF9E7DFEB1E6897BA8B5F /* Geist-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 811450B46711F5AF782EBEF3 /* Geist-SemiBold.ttf */; };
+		11B9C9D220FBCDB8A6E1FDC5 /* Geist-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F83942A75CD25C3E2B8CC991 /* Geist-Medium.ttf */; };
+		6D815E671160C6D7209F6D94 /* Geist-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 4D9179B8349E11AA34B54671 /* Geist-Regular.ttf */; };
 		1100290C2E847E2800035A57 /* NSItemProvider+LoadHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100290B2E847E2800035A57 /* NSItemProvider+LoadHelpers.swift */; };
 		110029272E84FD4C00035A57 /* TemporaryFileStorageService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110029262E84FD4C00035A57 /* TemporaryFileStorageService.swift */; };
 		1100292A2E8691B400035A57 /* FileShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110029292E8691B400035A57 /* FileShareView.swift */; };
@@ -181,6 +185,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		75AC941799345F0154A5626D /* Geist-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Resources/Fonts/Geist-Bold.ttf"; sourceTree = "<group>"; };
+		811450B46711F5AF782EBEF3 /* Geist-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Resources/Fonts/Geist-SemiBold.ttf"; sourceTree = "<group>"; };
+		F83942A75CD25C3E2B8CC991 /* Geist-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Resources/Fonts/Geist-Medium.ttf"; sourceTree = "<group>"; };
+		4D9179B8349E11AA34B54671 /* Geist-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Resources/Fonts/Geist-Regular.ttf"; sourceTree = "<group>"; };
 		1100290B2E847E2800035A57 /* NSItemProvider+LoadHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NSItemProvider+LoadHelpers.swift"; sourceTree = "<group>"; };
 		110029262E84FD4C00035A57 /* TemporaryFileStorageService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TemporaryFileStorageService.swift; sourceTree = "<group>"; };
 		110029292E8691B400035A57 /* FileShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileShareView.swift; sourceTree = "<group>"; };
@@ -579,6 +587,10 @@
 				B17266E02C6532560031BA0D /* Localizable.xcstrings */,
 				14CEF4192C5CAED400855D72 /* Assets.xcassets */,
 				14A7E5962C65FD31008C1BE9 /* boring.m4a */,
+				4D9179B8349E11AA34B54671 /* Geist-Regular.ttf */,
+				F83942A75CD25C3E2B8CC991 /* Geist-Medium.ttf */,
+				811450B46711F5AF782EBEF3 /* Geist-SemiBold.ttf */,
+				75AC941799345F0154A5626D /* Geist-Bold.ttf */,
 				1443E7F42C609E650027C1FC /* Info.plist */,
 				14CEF41E2C5CAED400855D72 /* boringNotch.entitlements */,
 				14CEF41B2C5CAED400855D72 /* Preview Content */,
@@ -888,6 +900,10 @@
 				112B0EB92E30DD0F00562D6C /* mediaremote-adapter.pl in Resources */,
 				B17266E12C6532560031BA0D /* Localizable.xcstrings in Resources */,
 				14A7E5972C65FD31008C1BE9 /* boring.m4a in Resources */,
+				6D815E671160C6D7209F6D94 /* Geist-Regular.ttf in Resources */,
+				11B9C9D220FBCDB8A6E1FDC5 /* Geist-Medium.ttf in Resources */,
+				085CF9E7DFEB1E6897BA8B5F /* Geist-SemiBold.ttf in Resources */,
+				24FC0DAF525FE3C5B3C41CBE /* Geist-Bold.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1234,7 +1250,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = boringNotch/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = TheBoringNotch;
+				INFOPLIST_KEY_CFBundleDisplayName = NotchHub;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSBackgroundOnly = NO;
 				INFOPLIST_KEY_LSUIElement = YES;
@@ -1287,7 +1303,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = boringNotch/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = TheBoringNotch;
+				INFOPLIST_KEY_CFBundleDisplayName = NotchHub;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_LSBackgroundOnly = NO;
 				INFOPLIST_KEY_LSUIElement = YES;

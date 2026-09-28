@@ -6,6 +6,7 @@
 //  Modified by Richard Kunkli on 24/08/2024.
 //
 
+import AppKit
 import AVFoundation
 import Combine
 import Defaults
@@ -32,6 +33,7 @@ struct ContentView: View {
     @State private var haptics: Bool = false
 
     @Namespace var albumArtNamespace
+
 
     @Default(.useMusicVisualizer) var useMusicVisualizer
 
@@ -100,11 +102,11 @@ struct ContentView: View {
                         : cornerRadiusInsets.closed.bottom
                     )
                     .padding([.horizontal, .bottom], vm.notchState == .open ? 12 : 0)
-                    .background(.black)
+                    .background(coordinator.protoDarkMode ? .black : .white)
                     .clipShape(currentNotchShape)
                     .overlay(alignment: .top) {
                         Rectangle()
-                            .fill(.black)
+                            .fill(coordinator.protoDarkMode ? .black : .white)
                             .frame(height: 1)
                             .padding(.horizontal, topCornerRadius)
                     }
@@ -242,6 +244,99 @@ struct ContentView: View {
         }
     }
 
+    // PROTOTYPE: auto-fit — offscreen-measured, dead-space-free sizing.
+    // Content above, dock navbar pinned at bottom always (Spacer) or full-height rail.
+    private let protoDockHeight: CGFloat = 52
+    private let protoRailWidth: CGFloat = 48
+
+    private var headerChrome: CGFloat {
+        max(24, vm.effectiveClosedNotchHeight) + 12
+    }
+
+    private var openChrome: CGFloat {
+        headerChrome + (coordinator.protoDockVertical ? 0 : protoDockHeight)
+    }
+
+    // PROTOTYPE: fit window to content via synchronous offscreen measure.
+    private func refitPrototype() {
+        guard vm.notchState == .open else { return }
+        if coordinator.currentView == .shelf {
+            if abs(vm.notchSize.height - openNotchSize.height) > 0.5 {
+                withAnimation(.smooth(duration: 0.25)) {
+                    vm.setFittedOpenHeight(openNotchSize.height)
+                }
+            }
+            return
+        }
+        let probe = notchOpenContent()
+            .frame(width: openContentWidth)
+            .fixedSize(horizontal: false, vertical: true)
+            .environmentObject(vm)
+        let hosting = NSHostingView(rootView: AnyView(probe))
+        hosting.layoutSubtreeIfNeeded()
+        var h = hosting.fittingSize.height
+        guard h > 10, h.isFinite else { return }
+        h = min(max(h, 120), 380)
+        let target = min(h + openChrome, windowSize.height)
+        if abs(vm.notchSize.height - target) > 0.5 {
+            withAnimation(.smooth(duration: 0.25)) {
+                vm.setFittedOpenHeight(target)
+            }
+        }
+    }
+
+    private var openContentWidth: CGFloat {
+        let inset =
+            (Defaults[.cornerRadiusScaling]
+                ? cornerRadiusInsets.opened.top : cornerRadiusInsets.opened.bottom) + 12
+        let rail = coordinator.protoDockVertical ? (protoRailWidth + 8) : 0
+        return openNotchSize.width - inset * 2 - rail
+    }
+
+    @ViewBuilder
+    func notchOpenContent() -> some View {
+        switch coordinator.currentView {
+        case .home:
+            NotchHomeView(albumArtNamespace: albumArtNamespace)
+        case .shelf:
+            ShelfView()
+        case .revenue:
+            RevenuePrototypeView()
+        case .analytics:
+            AnalyticsPrototypeView()
+        case .scratchpad:
+            ScratchpadPrototypeView()
+        case .calendarHub:
+            CalendarPrototypeView()
+        case .timers:
+            TimersPrototypeView()
+        case .stats:
+            StatsPrototypeView()
+        case .screentime:
+            ScreenTimePrototypeView()
+        case .weather:
+            WeatherPrototypeView()
+        case .clipboard:
+            ClipboardPrototypeView()
+        case .notes:
+            NotesPrototypeView()
+        case .files:
+            FilesPrototypeView()
+        case .links:
+            LinksPrototypeView()
+        case .emoji:
+            EmojiPrototypeView()
+        case .sounds:
+            SoundsPrototypeView()
+        case .message:
+            MessagePrototypeView()
+        case .claude:
+            ClaudePrototypeView()
+        case .units:
+            UnitsPrototypeView()
+        }
+    }
+
     @ViewBuilder
     func NotchLayout() -> some View {
         VStack(alignment: .leading) {
@@ -295,6 +390,7 @@ struct ContentView: View {
                        } else if vm.notchState == .open {
                            BoringHeader()
                                .frame(height: max(24, vm.effectiveClosedNotchHeight))
+                               .environment(\.colorScheme, coordinator.protoDarkMode ? .dark : .light)
                                .opacity(gestureProgress != 0 ? 1.0 - min(abs(gestureProgress) * 0.1, 0.3) : 1.0)
                        } else {
                            Rectangle().fill(.clear).frame(width: vm.closedNotchSize.width - 20, height: vm.effectiveClosedNotchHeight)
@@ -343,18 +439,24 @@ struct ContentView: View {
               }
               .zIndex(2)
             if vm.notchState == .open {
-                VStack {
-                    switch coordinator.currentView {
-                    case .home:
-                        NotchHomeView(albumArtNamespace: albumArtNamespace)
-                    case .shelf:
-                        ShelfView()
-                    }
+                ProtoShell {
+                    notchOpenContent()
+                }
+                .environment(\.colorScheme, coordinator.protoDarkMode ? .dark : .light)
+                .frame(height: max(0, vm.notchSize.height - headerChrome), alignment: .top)
+                .onAppear {
+                    refitPrototype()
+                }
+                .onChange(of: coordinator.currentView) { _, _ in
+                    refitPrototype()
+                }
+                .onChange(of: coordinator.protoDockVertical) { _, _ in
+                    refitPrototype()
                 }
                 .transition(
                     .scale(scale: 0.8, anchor: .top)
-                    .combined(with: .opacity)
-                    .animation(.smooth(duration: 0.35))
+                        .combined(with: .opacity)
+                        .animation(.smooth(duration: 0.35))
                 )
                 .zIndex(1)
                 .allowsHitTesting(vm.notchState == .open)
@@ -550,7 +652,27 @@ struct ContentView: View {
                     }
                     
                     if self.vm.notchState == .open && !self.vm.isBatteryPopoverActive && !SharingStateManager.shared.preventNotchClose {
-                        self.vm.close()
+                        // PROTOTYPE: dock/header clicks resize the notch, which can fake a
+                        // hover-exit under a stationary cursor — honor nav grace first.
+                        let remaining = self.coordinator.suppressAutoCloseUntil.timeIntervalSinceNow
+                        if remaining > 0 {
+                            Task { @MainActor in
+                                // Wait out the grace (re-reads deadline so rapid clicks extend it).
+                                while Date() < self.coordinator.suppressAutoCloseUntil {
+                                    let r = self.coordinator.suppressAutoCloseUntil.timeIntervalSinceNow
+                                    try? await Task.sleep(for: .seconds(max(r, 0.05)))
+                                    guard !Task.isCancelled else { return }
+                                }
+                                if self.vm.notchState == .open && !self.isHovering
+                                    && !self.vm.isBatteryPopoverActive
+                                    && !SharingStateManager.shared.preventNotchClose
+                                {
+                                    self.vm.close()
+                                }
+                            }
+                        } else {
+                            self.vm.close()
+                        }
                     }
                 }
             }
@@ -650,7 +772,6 @@ struct GeneralDropTargetDelegate: DropDelegate {
         return false
     }
 }
-
 #Preview {
     let vm = BoringViewModel()
     vm.open()

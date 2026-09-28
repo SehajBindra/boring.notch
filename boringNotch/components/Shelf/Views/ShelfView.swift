@@ -63,7 +63,7 @@ struct ShelfView: View {
             .stroke(
                 vm.dragDetectorTargeting
                     ? Color.accentColor.opacity(0.9)
-                    : Color.white.opacity(0.1),
+                    : Color.primary.opacity(0.15),
                 style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [10])
             )
             .overlay {
@@ -84,7 +84,7 @@ struct ShelfView: View {
                     Image(systemName: "tray.and.arrow.down")
                         .symbolVariant(.fill)
                         .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.white, .gray)
+                        .foregroundStyle(.primary, .secondary)
                         .imageScale(.large)
                     
                     Text("Drop files here")

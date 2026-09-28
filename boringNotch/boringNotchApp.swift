@@ -7,6 +7,7 @@
 
 import AVFoundation
 import Combine
+import CoreText
 import Defaults
 import KeyboardShortcuts
 import Sparkle
@@ -21,6 +22,7 @@ struct DynamicNotchApp: App {
     let updaterController: SPUStandardUpdaterController
 
     init() {
+        Self.registerBundledFonts()
         updaterController = SPUStandardUpdaterController(
             startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
 
@@ -28,8 +30,16 @@ struct DynamicNotchApp: App {
         SettingsWindowController.shared.setUpdaterController(updaterController)
     }
 
+    // B&W theme uses Geist (bundled in Resources/Fonts). Registered once at launch.
+    private static func registerBundledFonts() {
+        for name in ["Geist-Regular", "Geist-Medium", "Geist-SemiBold", "Geist-Bold"] {
+            guard let url = Bundle.main.url(forResource: name, withExtension: "ttf") else { continue }
+            CTFontManagerRegisterFontsForURL(url as CFURL, .process, nil)
+        }
+    }
+
     var body: some Scene {
-        MenuBarExtra("boring.notch", systemImage: "sparkle", isInserted: $showMenuBarIcon) {
+        MenuBarExtra("NotchHub", systemImage: "bolt.fill", isInserted: $showMenuBarIcon) {
             Button("Settings") {
                 DispatchQueue.main.async {
                     SettingsWindowController.shared.showWindow()
@@ -38,7 +48,7 @@ struct DynamicNotchApp: App {
             .keyboardShortcut(KeyEquivalent(","), modifiers: .command)
             CheckForUpdatesView(updater: updaterController.updater)
             Divider()
-            Button("Restart Boring Notch") {
+            Button("Restart NotchHub") {
                 ApplicationRelauncher.restart()
             }
             Button("Quit", role: .destructive) {

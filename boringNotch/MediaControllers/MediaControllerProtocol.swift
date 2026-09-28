@@ -13,6 +13,10 @@ protocol MediaControllerProtocol: ObservableObject {
     var playbackStatePublisher: AnyPublisher<PlaybackState, Never> { get }
     var supportsVolumeControl: Bool { get }
     var supportsFavorite: Bool { get }
+    /// Whether the active source honors programmatic seeks.
+    /// Browser/WebKit clients (Safari, Chrome, …) reject MediaRemote seeks
+    /// (`mediaremote-adapter seek` exits 1), so the slider must be read-only.
+    var supportsSeeking: Bool { get }
     
     func setFavorite(_ favorite: Bool) async
     func play() async
@@ -26,4 +30,9 @@ protocol MediaControllerProtocol: ObservableObject {
     func setVolume(_ level: Double) async
     func isActive() -> Bool
     func updatePlaybackInfo() async
+}
+
+extension MediaControllerProtocol {
+    /// Default: dedicated app controllers (Music, Spotify, YT Music) seek fine.
+    var supportsSeeking: Bool { true }
 }

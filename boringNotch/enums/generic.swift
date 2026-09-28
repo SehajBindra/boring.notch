@@ -7,6 +7,7 @@
 
 import Foundation
 import Defaults
+import SwiftUI
 
 public enum Style {
     case notch
@@ -27,6 +28,94 @@ public enum NotchState {
 public enum NotchViews {
     case home
     case shelf
+    // MARK: - Prototype hub (mock UI only, no backends)
+    case revenue
+    case analytics
+    case scratchpad
+    case calendarHub
+    case timers
+    case stats
+    case screentime
+    case weather
+    case clipboard
+    case notes
+    case files
+    case links
+    case emoji
+    case sounds
+    case message
+    case claude
+    case units
+}
+
+public extension NotchViews {
+    // PROTOTYPE: display metadata for quick launcher. No logic.
+    var protoTitle: String {
+        switch self {
+        case .home: return "Home"
+        case .shelf: return "Shelf"
+        case .revenue: return "Revenue"
+        case .analytics: return "Analytics"
+        case .scratchpad: return "Scratchpad"
+        case .calendarHub: return "Calendar"
+        case .timers: return "Timers"
+        case .stats: return "Stats"
+        case .screentime: return "Screen Time"
+        case .weather: return "Weather"
+        case .clipboard: return "Clipboard"
+        case .notes: return "Notes"
+        case .files: return "Files"
+        case .links: return "Links"
+        case .emoji: return "Emoji"
+        case .sounds: return "Sounds"
+        case .message: return "Message"
+        case .claude: return "Claude"
+        case .units: return "Units"
+        }
+    }
+
+    var protoIcon: String {
+        switch self {
+        case .home: return "house.fill"
+        case .shelf: return "tray.fill"
+        case .revenue: return "banknote.fill"
+        case .analytics: return "chart.line.uptrend.xyaxis"
+        case .scratchpad: return "square.and.pencil"
+        case .calendarHub: return "calendar"
+        case .timers: return "timer"
+        case .stats: return "cpu.fill"
+        case .screentime: return "hourglass.fill"
+        case .weather: return "cloud.sun.fill"
+        case .clipboard: return "list.clipboard.fill"
+        case .notes: return "note.text"
+        case .files: return "folder.fill"
+        case .links: return "link.circle.fill"
+        case .emoji: return "face.smiling.fill"
+        case .sounds: return "speaker.wave.2.fill"
+        case .message: return "text.bubble.fill"
+        case .claude: return "sparkles"
+        case .units: return "arrow.left.arrow.right"
+        }
+    }
+
+    // Apple-style tile tints for a polished launcher look.
+    // B&W theme: monochrome tiles (white tile, black glyph).
+    var protoTint: Color {
+        .white
+    }
+
+    static var launcherItems: [NotchViews] {
+        [.revenue, .analytics, .scratchpad, .shelf, .calendarHub, .timers,
+         .stats, .screentime, .weather, .clipboard, .notes, .files,
+         .links, .emoji, .sounds, .message, .claude, .units]
+    }
+
+    // Bottom dock order (home first, like the reference dock).
+    static var dockItems: [NotchViews] {
+        [.home, .revenue, .analytics, .scratchpad, .shelf, .calendarHub, .timers,
+         .stats, .screentime, .weather, .clipboard, .notes, .files,
+         .links, .emoji, .sounds, .message, .claude, .units]
+    }
 }
 
 enum SettingsEnum {

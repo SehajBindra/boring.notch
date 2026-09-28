@@ -51,6 +51,9 @@ class BoringViewCoordinator: ObservableObject {
     static let shared = BoringViewCoordinator()
 
     @Published var currentView: NotchViews = .home
+    // PROTOTYPE: dock/header navigation sets this so the hover-exit auto-close
+    // doesn't kill the notch when a resize fakes an exit under a still cursor.
+    var suppressAutoCloseUntil = Date.distantPast
     @Published var helloAnimationRunning: Bool = false
     private var sneakPeekDispatch: DispatchWorkItem?
     private var expandingViewDispatch: DispatchWorkItem?
@@ -60,6 +63,10 @@ class BoringViewCoordinator: ObservableObject {
     @AppStorage("showWhatsNew") var showWhatsNew: Bool = true
     @AppStorage("musicLiveActivityEnabled") var musicLiveActivityEnabled: Bool = true
     @AppStorage("currentMicStatus") var currentMicStatus: Bool = true
+    // PROTOTYPE: bottom dock orientation (false = horizontal dock, true = vertical rail).
+    @AppStorage("protoDockVertical") var protoDockVertical: Bool = false
+    // PROTOTYPE: hub theme (true = dark, false = light). Panel chrome stays dark.
+    @AppStorage("protoDarkMode") var protoDarkMode: Bool = true
 
     @AppStorage("alwaysShowTabs") var alwaysShowTabs: Bool = true {
         didSet {
@@ -296,5 +303,15 @@ class BoringViewCoordinator: ObservableObject {
     
     func showEmpty() {
         currentView = .home
+    }
+
+    // PROTOTYPE: navigate with anti-close grace (see suppressAutoCloseUntil).
+    func pokeNavGrace(_ grace: TimeInterval = 2.5) {
+        suppressAutoCloseUntil = Date().addingTimeInterval(grace)
+    }
+
+    func navigate(to view: NotchViews, grace: TimeInterval = 2.5) {
+        pokeNavGrace(grace)
+        withAnimation(.smooth) { currentView = view }
     }
 }

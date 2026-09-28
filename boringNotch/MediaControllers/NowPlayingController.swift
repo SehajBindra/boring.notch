@@ -33,6 +33,37 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         return bundleID == "com.apple.Music"
     }
 
+    /// Verified 2026-09-29: `mediaremote-adapter seek` exits 1
+    /// ("Failed to seek") for browser video. Browsers that expose
+    /// "execute JavaScript" over AppleScript are seeked by setting the page's
+    /// `<video>.currentTime` instead (requires the browser's
+    /// "Allow JavaScript from Apple Events" option). Firefox has no such
+    /// hook, so it stays read-only.
+    private enum BrowserScripting {
+        case chromium(appBundleID: String)
+        case safari
+    }
+
+    private static func browserScripting(for bundleID: String) -> BrowserScripting? {
+        switch bundleID {
+        case "com.apple.Safari", "com.apple.WebKit.GPU", "com.apple.WebKit.WebContent":
+            return .safari
+        case "com.google.Chrome", "com.google.Chrome.canary", "company.thebrowser.Browser",
+             "com.brave.Browser", "com.microsoft.edgemac", "com.operasoftware.Opera":
+            return .chromium(appBundleID: bundleID)
+        default:
+            return nil
+        }
+    }
+
+    private static let nonSeekableBundleIDs: Set<String> = [
+        "org.mozilla.firefox",
+    ]
+
+    var supportsSeeking: Bool {
+        !Self.nonSeekableBundleIDs.contains(playbackState.bundleIdentifier)
+    }
+
     func setFavorite(_ favorite: Bool) async {
         let bundleID = playbackState.bundleIdentifier
         
@@ -139,8 +170,133 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         MRMediaRemoteSendCommandFunction(5, nil)
     }
 
+    /// Skip backward by a fixed interval (works better than previous-track for in-page video).
+    func skipBackward(seconds: TimeInterval = 15) async {
+        let target = max(0, estimatedCurrentTime() - seconds)
+        await seek(to: target)
+    }
+
+    func skipForward(seconds: TimeInterval = 15) async {
+        let duration = playbackState.duration
+        let base = estimatedCurrentTime()
+        let target = duration > 0 ? min(duration, base + seconds) : base + seconds
+        await seek(to: target)
+    }
+
+    /// Estimated position accounting for time since the last adapter event.
+    /// `playbackState.currentTime` alone goes stale between diffs.
+    private func estimatedCurrentTime(at date: Date = Date()) -> Double {
+        let base = playbackState.currentTime
+        guard playbackState.isPlaying else { return base }
+        let elapsed = date.timeIntervalSince(playbackState.lastUpdated)
+        guard elapsed > 0 else { return base }
+        let estimated = base + (elapsed * playbackState.playbackRate)
+        if playbackState.duration > 0 {
+            return min(max(estimated, 0), playbackState.duration)
+        }
+        return max(estimated, 0)
+    }
+
     func seek(to time: Double) async {
-        MRMediaRemoteSetElapsedTimeFunction(time)
+        let clamped: Double
+        if playbackState.duration > 0 {
+            clamped = min(max(time, 0), playbackState.duration)
+        } else {
+            clamped = max(time, 0)
+        }
+        // Optimistic update with a fresh timestamp so estimated position
+        // doesn't drift between the drag and the next adapter event.
+        var updated = playbackState
+        updated.currentTime = clamped
+        updated.lastUpdated = Date()
+        playbackState = updated
+        // Browser video: MediaRemote seeks are rejected, so drive the page.
+        if let browser = Self.browserScripting(for: playbackState.bundleIdentifier) {
+            if await runBrowserSeek(browser, to: clamped, duration: playbackState.duration) {
+                return
+            }
+        }
+        // Preferred path: mediaremote-adapter helper (same entitled perl +
+        // framework used for `stream`). The direct private-framework call
+        // below is sandboxed in the main app and silently no-ops for
+        // browser clients (Safari/Chrome), which is why the slider snapped back.
+        let adapterOK = await runAdapterSeek(to: clamped)
+        if !adapterOK {
+            MRMediaRemoteSetElapsedTimeFunction(clamped)
+        }
+    }
+
+    /// Sets `currentTime` on the page's media element via AppleScript
+    /// "execute javascript". Walks every tab and seeks the first one holding
+    /// media whose duration matches the now-playing item (playing media wins),
+    /// so a background tab still works. Returns true when a tab accepted it.
+    private func runBrowserSeek(_ browser: BrowserScripting, to seconds: Double, duration: Double) async -> Bool {
+        // Single-quoted JS only: it is embedded in an AppleScript string literal.
+        let js = """
+        (function(){var d=\(duration),t=\(seconds);\
+        var m=Array.prototype.slice.call(document.querySelectorAll('video,audio'));\
+        m=m.filter(function(e){return d<=0||!isFinite(e.duration)||Math.abs(e.duration-d)<3;});\
+        if(!m.length)return 'none';\
+        var e=m.filter(function(x){return !x.paused;})[0]||m[0];\
+        e.currentTime=t;return 'ok';})()
+        """
+        let script: String
+        switch browser {
+        case .chromium(let appBundleID):
+            script = """
+            tell application id "\(appBundleID)"
+                repeat with w in windows
+                    repeat with t in tabs of w
+                        try
+                            if (execute t javascript "\(js)") is "ok" then return "ok"
+                        end try
+                    end repeat
+                end repeat
+            end tell
+            return "none"
+            """
+        case .safari:
+            script = """
+            tell application id "com.apple.Safari"
+                repeat with w in windows
+                    repeat with t in tabs of w
+                        try
+                            if (do JavaScript "\(js)" in t) is "ok" then return "ok"
+                        end try
+                    end repeat
+                end repeat
+            end tell
+            return "none"
+            """
+        }
+        guard let result = try? await AppleScriptHelper.execute(script) else { return false }
+        return result.stringValue == "ok"
+    }
+
+    /// One-shot `mediaremote-adapter seek <microseconds>` invocation.
+    /// Returns true only when the helper exits 0.
+    private func runAdapterSeek(to seconds: Double) async -> Bool {
+        guard
+            let scriptURL = Bundle.main.url(forResource: "mediaremote-adapter", withExtension: "pl"),
+            let frameworkPath = Bundle.main.privateFrameworksPath?.appending("/MediaRemoteAdapter.framework")
+        else { return false }
+        let micros = Int64(max(0, seconds) * 1_000_000)
+        return await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let taskProcess = Process()
+                taskProcess.executableURL = URL(fileURLWithPath: "/usr/bin/perl")
+                taskProcess.arguments = [scriptURL.path, frameworkPath, "seek", "\(micros)"]
+                taskProcess.standardOutput = Pipe()
+                taskProcess.standardError = Pipe()
+                do {
+                    try taskProcess.run()
+                    taskProcess.waitUntilExit()
+                    continuation.resume(returning: taskProcess.terminationStatus == 0)
+                } catch {
+                    continuation.resume(returning: false)
+                }
+            }
+        }
     }
 
     func isActive() -> Bool {
@@ -241,13 +397,13 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
             newPlaybackState.currentTime = elapsedTime
         } else if diff {
             if payload.playing == false {
+                newPlaybackState.currentTime = self.playbackState.currentTime
+            } else {
                 let timeSinceLastUpdate = Date().timeIntervalSince(self.playbackState.lastUpdated)
                 newPlaybackState.currentTime = self.playbackState.currentTime + (self.playbackState.playbackRate * timeSinceLastUpdate)
-            } else {
-                newPlaybackState.currentTime = self.playbackState.currentTime
             }
         } else {
-            newPlaybackState.currentTime = 0
+            newPlaybackState.currentTime = self.playbackState.currentTime > 0 ? self.playbackState.currentTime : 0
         }
 
         
@@ -292,7 +448,21 @@ final class NowPlayingController: ObservableObject, MediaControllerProtocol {
         )
         
         newPlaybackState.volume = payload.volume ?? (diff ? self.playbackState.volume : 0.5)
-        
+
+        // Safari / browser players often send sparse updates on pause that would wipe title & duration.
+        let wouldClearTitle = newPlaybackState.title.isEmpty && !self.playbackState.title.isEmpty
+        let pauseStyleUpdate = payload.playing == false || !newPlaybackState.isPlaying
+        if wouldClearTitle && (diff || pauseStyleUpdate) {
+            newPlaybackState.title = self.playbackState.title
+            if newPlaybackState.artist.isEmpty { newPlaybackState.artist = self.playbackState.artist }
+            if newPlaybackState.album.isEmpty { newPlaybackState.album = self.playbackState.album }
+            if newPlaybackState.duration <= 0 { newPlaybackState.duration = self.playbackState.duration }
+            if newPlaybackState.bundleIdentifier.isEmpty {
+                newPlaybackState.bundleIdentifier = self.playbackState.bundleIdentifier
+            }
+            if newPlaybackState.artwork == nil { newPlaybackState.artwork = self.playbackState.artwork }
+        }
+
         self.playbackState = newPlaybackState
         
         // Fetch favorite state for supported apps asynchronously
@@ -424,3 +594,4 @@ actor JSONLinesPipeHandler {
         }
     }
 }
+
