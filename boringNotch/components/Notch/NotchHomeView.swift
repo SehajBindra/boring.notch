@@ -784,7 +784,7 @@ private struct ProtoPill: View {
 
 // MARK: - Proto calendar helpers
 
-private enum ProtoCalendarHelpers {
+enum ProtoCalendarHelpers {
     static func filteredEvents(_ events: [EventModel]) -> [EventModel] {
         EventListView.filteredEvents(events: events)
     }
@@ -819,15 +819,36 @@ private enum ProtoCalendarHelpers {
         }
     }
 
-    /// Compact "Next Up" phrasing: "in 45 min", "Now", or "at 3:30 PM" when far out.
+    /// Compact "Next Up" phrasing: "in 45 min", "Now", "Tomorrow at 3:30 PM", etc.
     static func nextUpLine(for event: EventModel, now: Date = Date()) -> String {
-        if event.isAllDay { return "All day" }
+        let calendar = Calendar.current
+        if event.isAllDay {
+            if calendar.isDateInToday(event.start) { return "All day" }
+            if calendar.isDateInTomorrow(event.start) { return "Tomorrow · all day" }
+            return event.start.formatted(.dateTime.weekday(.wide).month(.abbreviated).day()) + " · all day"
+        }
         let time = event.start.formatted(date: .omitted, time: .shortened)
-        if event.start <= now { return "Now · until \(event.end.formatted(date: .omitted, time: .shortened))" }
+        if event.start <= now {
+            return "Now · until \(event.end.formatted(date: .omitted, time: .shortened))"
+        }
+        if !calendar.isDateInToday(event.start) {
+            if calendar.isDateInTomorrow(event.start) { return "Tomorrow at \(time)" }
+            let day = event.start.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+            return "\(day) at \(time)"
+        }
         let minutes = Int(ceil(event.start.timeIntervalSince(now) / 60))
         if minutes < 60 { return "in \(minutes) min" }
         if minutes < 180 { return "in \(minutes / 60)h \(minutes % 60)m" }
         return "at \(time)"
+    }
+
+    static func nextUpFootnote(for event: EventModel, in events: [EventModel]) -> String {
+        let calendar = Calendar.current
+        guard calendar.isDateInToday(event.start) else {
+            return "From \(event.calendar.title)"
+        }
+        let more = remainingTodayCount(in: events, excluding: event)
+        return more == 0 ? "No other events today" : "\(more) more today"
     }
 
     static func eventIcon(for event: EventModel) -> String {
@@ -864,22 +885,31 @@ struct PrototypeHomeView: View {
     @State private var dropTargeted = false
     @State private var shelfToast: String?
     @State private var toastTask: Task<Void, Never>?
+    @State private var homeTopRowHeight: CGFloat = 0
 
     private var nextEvent: EventModel? {
-        ProtoCalendarHelpers.nextHighlightEvent(in: calendarManager.events)
+        ProtoCalendarHelpers.nextHighlightEvent(in: calendarManager.upcomingEvents)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
                 nowPlayingCard
-                nextEventCard
+                    .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                    .reportHomeCardHeight()
+                nextEventCard(matchedHeight: homeTopRowHeight)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(.smooth, value: homeTopRowHeight)
+            .onPreferenceChange(HomeCardHeightKey.self) { height in
+                if height > 0 { homeTopRowHeight = height }
             }
             HomeQuickAccessRow()
             HomeStatusRow(showChips: showStatusChips)
                 .zIndex(1) // search results open upward over the tiles
         }
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 8)
         .padding(.bottom, 6)
         .overlay { dropOverlay }
         .overlay(alignment: .bottom) { shelfToastView }
@@ -910,10 +940,14 @@ struct PrototypeHomeView: View {
         .task {
             await calendarManager.checkCalendarAuthorization()
             await calendarManager.checkReminderAuthorization()
-            await calendarManager.updateCurrentDate(Date.now)
+            await calendarManager.refreshAllEvents()
             HomeSuggestionEngine.shared.evaluate(
-                events: calendarManager.events,
+                events: calendarManager.upcomingEvents,
                 shelfCount: ShelfStateViewModel.shared.items.count)
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(300))
+                await calendarManager.refreshAllEvents()
+            }
         }
     }
 
@@ -934,7 +968,7 @@ struct PrototypeHomeView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(.ultraThinMaterial, in: shape)
             .overlay(shape.strokeBorder(Color.primary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
-            .padding(.horizontal, 4)
+            .padding(.horizontal, 8)
             .padding(.bottom, 6)
             .transition(.opacity)
             .allowsHitTesting(false)
@@ -1112,39 +1146,53 @@ struct PrototypeHomeView: View {
             || calendarManager.calendarAuthorizationStatus == .restricted
     }
 
+    private var calendarNeedsAccess: Bool {
+        calendarAccessDenied
+            || calendarManager.calendarAuthorizationStatus == .notDetermined
+            || calendarManager.calendarAuthorizationStatus == .writeOnly
+    }
+
     // Next Up: tap opens the calendar/agenda. Denied state keeps its own Settings button.
     @ViewBuilder
-    private var nextEventCard: some View {
-        if calendarAccessDenied {
-            nextEventContent
-                .frame(width: 150, alignment: .leading)
+    private func nextEventCard(matchedHeight: CGFloat) -> some View {
+        let pad = HomeCardMetrics.surfacePadding
+        let innerMinHeight = matchedHeight > pad * 2 ? matchedHeight - pad * 2 : nil
+
+        if calendarNeedsAccess && calendarAccessDenied {
+            nextEventContent(now: Date(), stretch: innerMinHeight != nil)
+                .homeNextUpInnerFrame(minHeight: innerMinHeight)
+                .fixedSize(horizontal: false, vertical: innerMinHeight == nil)
                 .protoCard()
+                .homeNextUpOuterFrame(minHeight: matchedHeight > 0 ? matchedHeight : nil)
+                .fixedSize(horizontal: true, vertical: false)
         } else {
             Button {
                 BoringViewCoordinator.shared.navigate(to: .calendarHub)
             } label: {
                 TimelineView(.periodic(from: .now, by: 30)) { context in
-                    nextEventContent(now: context.date)
+                    nextEventContent(now: context.date, stretch: innerMinHeight != nil)
                 }
-                .frame(width: 150, alignment: .topLeading)
+                .homeNextUpInnerFrame(minHeight: innerMinHeight)
+                .fixedSize(horizontal: false, vertical: innerMinHeight == nil)
                 .overlay(alignment: .topTrailing) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundStyle(.gray)
+                        .padding(.top, 1)
                 }
                 .homeSurface()
+                .homeNextUpOuterFrame(minHeight: matchedHeight > 0 ? matchedHeight : nil)
             }
             .buttonStyle(HomeTileButtonStyle())
+            .fixedSize(horizontal: true, vertical: false)
             .help("Open Calendar")
             .accessibilityLabel(nextEvent.map { "Next up: \($0.title), \(ProtoCalendarHelpers.nextUpLine(for: $0))" } ?? "Next up: nothing scheduled")
         }
     }
 
-    private var nextEventContent: some View { nextEventContent(now: Date()) }
-
     @ViewBuilder
-    private func nextEventContent(now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+    private func nextEventContent(now: Date, stretch: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
             Text("Next Up").font(.geist(9)).foregroundStyle(.gray)
             if calendarAccessDenied {
                 Text("Calendar access off").font(.geist(12, .semibold)).foregroundStyle(.primary).lineLimit(1)
@@ -1158,21 +1206,41 @@ struct PrototypeHomeView: View {
                 .buttonStyle(.plain)
                 .font(.geist(10))
                 .foregroundStyle(.gray)
-            } else if let event = ProtoCalendarHelpers.nextHighlightEvent(in: calendarManager.events, now: now) {
-                Text(event.title).font(.geist(12, .semibold)).foregroundStyle(.primary).lineLimit(1)
+            } else if calendarManager.calendarAuthorizationStatus == .notDetermined {
+                Text("Connect calendar").font(.geist(12, .semibold)).foregroundStyle(.primary).lineLimit(1)
+                Button("Allow Access") {
+                    Task { await calendarManager.checkCalendarAuthorization() }
+                }
+                .buttonStyle(.plain)
+                .font(.geist(10))
+                .foregroundStyle(.gray)
+            } else if let event = ProtoCalendarHelpers.nextHighlightEvent(
+                in: calendarManager.upcomingEvents, now: now)
+            {
+                Text(event.title)
+                    .font(.geist(12, .semibold))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
                 Text(ProtoCalendarHelpers.nextUpLine(for: event, now: now))
                     .font(.geist(10)).foregroundStyle(.primary).lineLimit(1)
                     .contentTransition(.numericText())
-                let more = ProtoCalendarHelpers.remainingTodayCount(
-                    in: calendarManager.events, excluding: event)
-                Text(more == 0 ? "No other events today" : "\(more) more today")
-                    .font(.geist(9)).foregroundStyle(.gray)
+                Text(ProtoCalendarHelpers.nextUpFootnote(for: event, in: calendarManager.upcomingEvents))
+                    .font(.geist(9))
+                    .foregroundStyle(.gray)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("Nothing scheduled").font(.geist(12, .semibold)).foregroundStyle(.primary).lineLimit(1)
-                Text("Enjoy the free time").font(.geist(10)).foregroundStyle(.gray).lineLimit(1)
+                Text("Add events in Calendar — Google syncs here too")
+                    .font(.geist(10)).foregroundStyle(.gray).lineLimit(2)
+            }
+            if stretch {
+                Spacer(minLength: 0)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.trailing, 10)
+        .frame(maxWidth: .infinity, maxHeight: stretch ? .infinity : nil, alignment: .topLeading)
     }
 }
 

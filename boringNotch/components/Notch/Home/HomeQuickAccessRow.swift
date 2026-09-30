@@ -2,7 +2,7 @@
 //  HomeQuickAccessRow.swift
 //  boringNotch
 //
-//  Four Quick Access tiles, chosen by QuickAccessStore (pins + recent usage).
+//  Four icon-only Quick Access tiles in a single 2×2 card, chosen by QuickAccessStore (pins + recent usage).
 //
 
 import SwiftUI
@@ -10,14 +10,18 @@ import SwiftUI
 struct HomeQuickAccessRow: View {
     @ObservedObject private var store = QuickAccessStore.shared
 
+    private let columns = Array(repeating: GridItem(.fixed(30), spacing: 6), count: 2)
+
     var body: some View {
-        HStack(spacing: 8) {
+        LazyVGrid(columns: columns, spacing: 6) {
             ForEach(Array(store.slots.enumerated()), id: \.element) { index, view in
                 HomeQuickAccessTile(view: view, slot: index)
                     .transition(.opacity)
             }
         }
         .animation(.smooth, value: store.slots)
+        .fixedSize()
+        .protoCard()
     }
 }
 
@@ -30,47 +34,31 @@ private struct HomeQuickAccessTile: View {
     @ObservedObject private var shelf = ShelfStateViewModel.shared
     @ObservedObject private var stats = SystemStatsMonitor.shared
     @AppStorage("protoScratchpadText") private var scratchpadText = ""
+    @State private var hovering = false
 
     var body: some View {
         Button {
             BoringViewCoordinator.shared.navigate(to: view)
         } label: {
-            HStack(spacing: 8) {
-                Image(systemName: view.protoIcon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(nsColor: .windowBackgroundColor))
-                    .frame(width: 26, height: 26)
-                    .background(Color.primary, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(view.protoTitle)
-                        .font(.geist(11, .medium))
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.geist(9))
-                            .foregroundStyle(.gray)
-                            .lineLimit(1)
-                            .contentTransition(.numericText())
+            Image(systemName: view.protoIcon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color(nsColor: .windowBackgroundColor))
+                .frame(width: 30, height: 30)
+                .background(Color.primary.opacity(hovering ? 1 : 0.85), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .overlay(alignment: .topTrailing) {
+                    if store.isPinned(view) {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 6, weight: .semibold))
+                            .foregroundStyle(Color(nsColor: .windowBackgroundColor))
+                            .rotationEffect(.degrees(45))
+                            .offset(x: -3, y: 3)
                     }
                 }
-                Spacer(minLength: 0)
-            }
-            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
-            .overlay(alignment: .topTrailing) {
-                if store.isPinned(view) {
-                    Image(systemName: "pin.fill")
-                        .font(.system(size: 7, weight: .semibold))
-                        .foregroundStyle(.gray)
-                        .rotationEffect(.degrees(45))
-                        .offset(x: 2, y: -2)
-                }
-            }
-            .homeSurface(cornerRadius: 12, padding: 9)
+                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .onHover { h in withAnimation(.easeOut(duration: 0.15)) { hovering = h } }
         }
         .buttonStyle(HomeTileButtonStyle())
-        .help("Open \(view.protoTitle)")
+        .help(subtitle.map { "\(view.protoTitle) — \($0)" } ?? view.protoTitle)
         .accessibilityLabel(view.protoTitle)
         .accessibilityHint(subtitle ?? "")
         .contextMenu {
@@ -94,10 +82,9 @@ private struct HomeQuickAccessTile: View {
     private var subtitle: String? {
         switch view {
         case .calendarHub:
-            guard let event = EventListView.filteredEvents(events: calendarManager.events)
-                .first(where: { !$0.isAllDay && $0.end > Date() })
-            else { return "Free today" }
-            return event.start.formatted(date: .omitted, time: .shortened)
+            guard let event = ProtoCalendarHelpers.nextHighlightEvent(in: calendarManager.upcomingEvents)
+            else { return "Free this week" }
+            return ProtoCalendarHelpers.nextUpLine(for: event)
         case .shelf:
             let count = shelf.items.count
             return count == 0 ? "Empty" : "\(count) item\(count == 1 ? "" : "s")"

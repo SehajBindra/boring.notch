@@ -7,6 +7,55 @@
 
 import SwiftUI
 
+struct HomeCardHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+extension View {
+    @ViewBuilder
+    func homeNextUpInnerFrame(minHeight: CGFloat?) -> some View {
+        let width = HomeCardMetrics.nextUpContentWidth
+        if let minHeight {
+            frame(width: width, alignment: .topLeading)
+                .frame(minHeight: minHeight, alignment: .topLeading)
+        } else {
+            frame(width: width, alignment: .topLeading)
+        }
+    }
+
+    /// Full card width including `homeSurface()` / `protoCard()` padding.
+    @ViewBuilder
+    func homeNextUpOuterFrame(minHeight: CGFloat?) -> some View {
+        let width = HomeCardMetrics.nextUpCardWidth
+        if let minHeight {
+            frame(width: width, alignment: .topLeading)
+                .frame(minHeight: minHeight, alignment: .topLeading)
+        } else {
+            frame(width: width, alignment: .topLeading)
+        }
+    }
+
+    /// Reports this view’s height so sibling Home cards can match (e.g. Next Up ↔ Now Playing).
+    func reportHomeCardHeight() -> some View {
+        background {
+            GeometryReader { geo in
+                Color.clear.preference(key: HomeCardHeightKey.self, value: geo.size.height)
+            }
+        }
+    }
+}
+
+/// Vertical padding inside `protoCard()` / `homeSurface()` — keep in sync when matching heights.
+enum HomeCardMetrics {
+    static let surfacePadding: CGFloat = 8
+    /// Total visible width of the Next Up tile (matches Now Playing inset from shell edges).
+    static let nextUpCardWidth: CGFloat = 150
+    static var nextUpContentWidth: CGFloat { nextUpCardWidth - surfacePadding * 2 }
+}
+
 /// Subtle Apple-style press: slight scale + dim on a soft spring.
 struct HomeTileButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

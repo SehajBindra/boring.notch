@@ -17,6 +17,8 @@ class CalendarManager: ObservableObject {
 
     @Published var currentWeekStartDate: Date
     @Published var events: [EventModel] = []
+    /// Events from start of today through the next week — used for Home “Next Up”.
+    @Published var upcomingEvents: [EventModel] = []
     @Published var allCalendars: [CalendarModel] = []
     @Published var eventCalendars: [CalendarModel] = []
     @Published var reminderLists: [CalendarModel] = []
@@ -25,6 +27,7 @@ class CalendarManager: ObservableObject {
     @Published var reminderAuthorizationStatus: EKAuthorizationStatus = .notDetermined
     private var selectedCalendars: [CalendarModel] = []
     private let calendarService = CalendarService()
+    private let upcomingHorizonDays = 7
 
     private var eventStoreChangedObserver: NSObjectProtocol?
 
@@ -33,6 +36,8 @@ class CalendarManager: ObservableObject {
         setupEventStoreChangedObserver()
         Task {
             await reloadCalendarAndReminderLists()
+            await checkCalendarAuthorization()
+            await checkReminderAuthorization()
         }
     }
 
@@ -50,6 +55,7 @@ class CalendarManager: ObservableObject {
         ) { [weak self] _ in
             Task {
                 await self?.reloadCalendarAndReminderLists()
+                await self?.refreshAllEvents()
             }
         }
     }
@@ -79,20 +85,14 @@ class CalendarManager: ObservableObject {
             self.calendarAuthorizationStatus = granted ? .fullAccess : .denied
             if granted {
                 await reloadCalendarAndReminderLists()
-                events = await calendarService.events(
-                    from: currentWeekStartDate,
-                    to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
-                    calendars: selectedCalendars.map { $0.id })
+                await refreshAllEvents()
             }
         case .restricted, .denied:
             NSLog("Calendar access denied or restricted")
         case .fullAccess:
             NSLog("Full access")
             await reloadCalendarAndReminderLists()
-            events = await calendarService.events(
-                from: currentWeekStartDate,
-                to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
-                calendars: selectedCalendars.map { $0.id })
+            await refreshAllEvents()
         case .writeOnly:
             NSLog("Write only")
         @unknown default:
@@ -171,7 +171,7 @@ class CalendarManager: ObservableObject {
 
         Defaults[.calendarSelectionState] = selectionState
         updateSelectedCalendars()
-        await updateEvents()
+        await refreshAllEvents()
     }
 
     static func startOfDay(_ date: Date) -> Date {
@@ -180,10 +180,20 @@ class CalendarManager: ObservableObject {
 
     func updateCurrentDate(_ date: Date) async {
         currentWeekStartDate = Calendar.current.startOfDay(for: date)
+        await refreshAllEvents()
+    }
+
+    func refreshAllEvents() async {
         await updateEvents()
+        await updateUpcomingEvents()
     }
 
     private func updateEvents() async {
+        guard canReadEvents else {
+            events = []
+            upcomingEvents = []
+            return
+        }
         let calendarIDs = selectedCalendars.map { $0.id }
         let eventsResult = await calendarService.events(
             from: currentWeekStartDate,
@@ -192,13 +202,34 @@ class CalendarManager: ObservableObject {
         )
         self.events = eventsResult
     }
+
+    private func updateUpcomingEvents() async {
+        guard canReadEvents else {
+            upcomingEvents = []
+            return
+        }
+        let start = Calendar.current.startOfDay(for: Date())
+        guard
+            let end = Calendar.current.date(byAdding: .day, value: upcomingHorizonDays, to: start)
+        else { return }
+        let calendarIDs = selectedCalendars.map { $0.id }
+        upcomingEvents = await calendarService.events(
+            from: start,
+            to: end,
+            calendars: calendarIDs
+        )
+    }
+
+    private var canReadEvents: Bool {
+        if #available(macOS 14.0, *) {
+            calendarAuthorizationStatus == .fullAccess
+        } else {
+            calendarAuthorizationStatus == .authorized
+        }
+    }
     
     func setReminderCompleted(reminderID: String, completed: Bool) async {
         await calendarService.setReminderCompleted(reminderID: reminderID, completed: completed)
-        // Refresh events after updating
-        events = await calendarService.events(
-            from: currentWeekStartDate,
-            to: Calendar.current.date(byAdding: .day, value: 1, to: currentWeekStartDate)!,
-            calendars: selectedCalendars.map { $0.id })
+        await refreshAllEvents()
     }
 }
