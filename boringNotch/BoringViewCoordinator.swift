@@ -217,6 +217,7 @@ class BoringViewCoordinator: ObservableObject {
         icon: String = ""
     ) {
         sneakPeekDuration = duration
+        if status && FocusModeManager.shared.shouldSuppress(type) { return }
         if type != .music {
             // close()
             if !Defaults[.hudReplacement] {
@@ -272,6 +273,7 @@ class BoringViewCoordinator: ObservableObject {
         value: CGFloat = 0,
         browser: BrowserType = .chromium
     ) {
+        if status && FocusModeManager.shared.shouldSuppress(type) { return }
         Task { @MainActor in
             withAnimation(.smooth) {
                 self.expandingView.show = status
@@ -312,6 +314,21 @@ class BoringViewCoordinator: ObservableObject {
 
     func navigate(to view: NotchViews, grace: TimeInterval = 2.5) {
         pokeNavGrace(grace)
+        if view != .home, view != currentView {
+            QuickAccessStore.shared.recordOpen(view)
+        }
         withAnimation(.smooth) { currentView = view }
+    }
+
+    // Bumped to ask the header quick launcher to take keyboard focus.
+    @Published var focusSearchToken = UUID()
+    /// Set until Home's search field takes focus (it may not exist yet when switching views).
+    var pendingSearchFocus = false
+
+    func focusQuickLauncher() {
+        pokeNavGrace()
+        pendingSearchFocus = true
+        if currentView != .home { withAnimation(.smooth) { currentView = .home } }
+        focusSearchToken = UUID()
     }
 }

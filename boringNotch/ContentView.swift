@@ -120,7 +120,7 @@ struct ContentView: View {
                     )
                 
                 mainLayout
-                    .frame(height: vm.notchState == .open ? vm.notchSize.height : nil)
+                    .frame(height: vm.notchState == .open ? vm.notchSize.height : nil, alignment: .top)
                     .conditionalModifier(true) { view in
                         let openAnimation = Animation.spring(response: 0.42, dampingFraction: 0.8, blendDuration: 0)
                         let closeAnimation = Animation.spring(response: 0.45, dampingFraction: 1.0, blendDuration: 0)
@@ -163,6 +163,9 @@ struct ContentView: View {
                         }
                     }
                     .onChange(of: vm.notchState) { _, newState in
+                        if newState == .closed {
+                            (NSApp.windows.first { $0.isKeyWindow } as? BoringNotchSkyLightWindow)?.relinquishKeyFocus()
+                        }
                         if newState == .closed && isHovering {
                             withAnimation {
                                 isHovering = false
@@ -249,8 +252,16 @@ struct ContentView: View {
     private let protoDockHeight: CGFloat = 52
     private let protoRailWidth: CGFloat = 48
 
+    // Tall enough for the 30pt header controls even on non-notch displays.
+    private var openHeaderHeight: CGFloat {
+        max(34, vm.effectiveClosedNotchHeight)
+    }
+
+    private let openHeaderSpacing: CGFloat = 8
+
+    // Header + gap to content + the 12pt bottom padding around NotchLayout.
     private var headerChrome: CGFloat {
-        max(24, vm.effectiveClosedNotchHeight) + 12
+        openHeaderHeight + openHeaderSpacing + 12
     }
 
     private var openChrome: CGFloat {
@@ -339,7 +350,7 @@ struct ContentView: View {
 
     @ViewBuilder
     func NotchLayout() -> some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: vm.notchState == .open ? openHeaderSpacing : nil) {
             VStack(alignment: .leading) {
                 if coordinator.helloAnimationRunning {
                     Spacer()
@@ -389,7 +400,7 @@ struct ContentView: View {
                           BoringFaceAnimation()
                        } else if vm.notchState == .open {
                            BoringHeader()
-                               .frame(height: max(24, vm.effectiveClosedNotchHeight))
+                               .frame(height: openHeaderHeight)
                                .environment(\.colorScheme, coordinator.protoDarkMode ? .dark : .light)
                                .opacity(gestureProgress != 0 ? 1.0 - min(abs(gestureProgress) * 0.1, 0.3) : 1.0)
                        } else {

@@ -25,7 +25,7 @@ public enum NotchState {
     case open
 }
 
-public enum NotchViews {
+public enum NotchViews: String, Codable, CaseIterable {
     case home
     case shelf
     // MARK: - Prototype hub (mock UI only, no backends)
@@ -84,7 +84,7 @@ public extension NotchViews {
         case .calendarHub: return "calendar"
         case .timers: return "timer"
         case .stats: return "cpu.fill"
-        case .screentime: return "hourglass.fill"
+        case .screentime: return "hourglass"
         case .weather: return "cloud.sun.fill"
         case .clipboard: return "list.clipboard.fill"
         case .notes: return "note.text"
@@ -103,6 +103,37 @@ public extension NotchViews {
     var protoTint: Color {
         .white
     }
+
+    // Extra search terms for the quick launcher ("pdf" → Files, "pomodoro" → Timers).
+    var protoKeywords: [String] {
+        switch self {
+        case .home: return ["dashboard", "start"]
+        case .shelf: return ["drop", "tray", "airdrop", "share"]
+        case .revenue: return ["stripe", "sales", "money", "income"]
+        case .analytics: return ["traffic", "visitors", "metrics"]
+        case .scratchpad: return ["jot", "draft", "text"]
+        case .calendarHub: return ["agenda", "events", "meeting", "schedule", "reminders"]
+        case .timers: return ["pomodoro", "countdown", "stopwatch", "hydration", "alarm"]
+        case .stats: return ["cpu", "memory", "ram", "system", "activity"]
+        case .screentime: return ["usage", "focus", "apps"]
+        case .weather: return ["forecast", "temperature", "rain"]
+        case .clipboard: return ["copy", "paste", "history"]
+        case .notes: return ["memo", "write"]
+        case .files: return ["pdf", "documents", "finder", "recent"]
+        case .links: return ["bookmarks", "url", "web"]
+        case .emoji: return ["symbols", "emoticon"]
+        case .sounds: return ["ambient", "noise", "music"]
+        case .message: return ["banner", "scroll", "text"]
+        case .claude: return ["ai", "tokens", "code"]
+        case .units: return ["convert", "currency", "length", "calculator"]
+        }
+    }
+
+    // Features that can appear in Home's Quick Access row.
+    static var quickAccessCandidates: [NotchViews] { launcherItems }
+
+    // First-run Quick Access slots.
+    static let quickAccessDefaults: [NotchViews] = [.calendarHub, .timers, .clipboard, .weather]
 
     static var launcherItems: [NotchViews] {
         [.revenue, .analytics, .scratchpad, .shelf, .calendarHub, .timers,

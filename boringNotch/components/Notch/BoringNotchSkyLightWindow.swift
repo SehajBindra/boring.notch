@@ -53,6 +53,7 @@ class BoringNotchSkyLightWindow: NSPanel {
     
     private func configureWindow() {
         isFloatingPanel = true
+        becomesKeyOnlyIfNeeded = true
         isOpaque = false
         titleVisibility = .hidden
         titlebarAppearsTransparent = true
@@ -109,6 +110,15 @@ class BoringNotchSkyLightWindow: NSPanel {
     
     private var observers: Set<AnyCancellable> = []
     
-    override var canBecomeKey: Bool { false }
+    // Key only on demand (text fields like the Home quick launcher), never on the lock screen.
+    // Non-activating, so the user's frontmost app stays active.
+    override var canBecomeKey: Bool { !isSkyLightEnabled }
     override var canBecomeMain: Bool { false }
+
+    /// Hands keyboard focus back to the app the user was in.
+    func relinquishKeyFocus() {
+        guard isKeyWindow else { return }
+        makeFirstResponder(nil)
+        NSWorkspace.shared.frontmostApplication?.activate()
+    }
 }

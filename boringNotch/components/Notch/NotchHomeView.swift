@@ -661,7 +661,7 @@ extension Font {
     }
 }
 
-private extension View {
+extension View {
     func protoCard() -> some View {
         self
             .padding(8)
@@ -819,6 +819,17 @@ private enum ProtoCalendarHelpers {
         }
     }
 
+    /// Compact "Next Up" phrasing: "in 45 min", "Now", or "at 3:30 PM" when far out.
+    static func nextUpLine(for event: EventModel, now: Date = Date()) -> String {
+        if event.isAllDay { return "All day" }
+        let time = event.start.formatted(date: .omitted, time: .shortened)
+        if event.start <= now { return "Now · until \(event.end.formatted(date: .omitted, time: .shortened))" }
+        let minutes = Int(ceil(event.start.timeIntervalSince(now) / 60))
+        if minutes < 60 { return "in \(minutes) min" }
+        if minutes < 180 { return "in \(minutes / 60)h \(minutes % 60)m" }
+        return "at \(time)"
+    }
+
     static func eventIcon(for event: EventModel) -> String {
         if event.type.isReminder { return "checkmark.circle" }
         if event.isAllDay { return "sun.max.fill" }
@@ -848,6 +859,12 @@ struct PrototypeHomeView: View {
     @State private var draggingSlider = false
     @State private var lastSliderDrag = Date.distantPast
 
+    @Default(.homeShowStatusChips) private var showStatusChips
+    @Default(.boringShelf) private var shelfEnabled
+    @State private var dropTargeted = false
+    @State private var shelfToast: String?
+    @State private var toastTask: Task<Void, Never>?
+
     private var nextEvent: EventModel? {
         ProtoCalendarHelpers.nextHighlightEvent(in: calendarManager.events)
     }
@@ -858,16 +875,108 @@ struct PrototypeHomeView: View {
                 nowPlayingCard
                 nextEventCard
             }
+            HomeQuickAccessRow()
+            HomeStatusRow(showChips: showStatusChips)
+                .zIndex(1) // search results open upward over the tiles
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 6)
+        .overlay { dropOverlay }
+        .overlay(alignment: .bottom) { shelfToastView }
+        .onDrop(
+            of: [.fileURL, .url, .utf8PlainText, .plainText, .data],
+            isTargeted: Binding(
+                get: { dropTargeted },
+                set: { targeted in
+                    // Same flag the Shelf drop zone drives, so the notch stays open while hovering a drag.
+                    vm.dropZoneTargeting = targeted
+                    withAnimation(.smooth) { dropTargeted = targeted && shelfEnabled }
+                })
+        ) { providers in
+            guard shelfEnabled else { return false }
+            vm.dropEvent = true
+            ShelfStateViewModel.shared.load(providers)
+            showShelfToast(count: providers.count)
+            return true
+        }
         .onAppear {
             musicManager.forceUpdate()
+            QuickAccessStore.shared.refresh()
+            SystemStatsMonitor.shared.start()
+        }
+        .onDisappear {
+            SystemStatsMonitor.shared.stop()
         }
         .task {
             await calendarManager.checkCalendarAuthorization()
             await calendarManager.checkReminderAuthorization()
             await calendarManager.updateCurrentDate(Date.now)
+            HomeSuggestionEngine.shared.evaluate(
+                events: calendarManager.events,
+                shelfCount: ShelfStateViewModel.shared.items.count)
+        }
+    }
+
+    // MARK: Drop-anywhere Shelf
+
+    @ViewBuilder
+    private var dropOverlay: some View {
+        if dropTargeted {
+            let shape = RoundedRectangle(cornerRadius: 14, style: .continuous)
+            VStack(spacing: 6) {
+                Image(systemName: "tray.and.arrow.down.fill")
+                    .font(.system(size: 20, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                Text("Drop to add to Shelf")
+                    .font(.geist(12, .semibold))
+            }
+            .foregroundStyle(.primary)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(.ultraThinMaterial, in: shape)
+            .overlay(shape.strokeBorder(Color.primary.opacity(0.25), style: StrokeStyle(lineWidth: 1, dash: [5, 4])))
+            .padding(.horizontal, 4)
+            .padding(.bottom, 6)
+            .transition(.opacity)
+            .allowsHitTesting(false)
+        }
+    }
+
+    @ViewBuilder
+    private var shelfToastView: some View {
+        if let shelfToast {
+            HStack(spacing: 8) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                Text(shelfToast).font(.geist(11, .medium))
+                Button("View") {
+                    self.shelfToast = nil
+                    BoringViewCoordinator.shared.navigate(to: .shelf)
+                }
+                .buttonStyle(.plain)
+                .font(.geist(11, .semibold))
+                .foregroundStyle(.gray)
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .frame(height: 28)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.25), radius: 10, y: 4)
+            .padding(.bottom, 12)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+    }
+
+    private func showShelfToast(count: Int) {
+        BoringViewCoordinator.shared.pokeNavGrace(3)
+        toastTask?.cancel()
+        withAnimation(.smooth) {
+            shelfToast = count == 1 ? "Added to Shelf" : "Added \(count) items to Shelf"
+        }
+        toastTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.smooth) { shelfToast = nil }
         }
     }
 
@@ -998,13 +1107,46 @@ struct PrototypeHomeView: View {
         .help(disabled ? "Seeking isn't supported for Firefox video — use the page player" : "")
     }
 
+    private var calendarAccessDenied: Bool {
+        calendarManager.calendarAuthorizationStatus == .denied
+            || calendarManager.calendarAuthorizationStatus == .restricted
+    }
+
+    // Next Up: tap opens the calendar/agenda. Denied state keeps its own Settings button.
     @ViewBuilder
     private var nextEventCard: some View {
+        if calendarAccessDenied {
+            nextEventContent
+                .frame(width: 150, alignment: .leading)
+                .protoCard()
+        } else {
+            Button {
+                BoringViewCoordinator.shared.navigate(to: .calendarHub)
+            } label: {
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    nextEventContent(now: context.date)
+                }
+                .frame(width: 150, alignment: .topLeading)
+                .overlay(alignment: .topTrailing) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.gray)
+                }
+                .homeSurface()
+            }
+            .buttonStyle(HomeTileButtonStyle())
+            .help("Open Calendar")
+            .accessibilityLabel(nextEvent.map { "Next up: \($0.title), \(ProtoCalendarHelpers.nextUpLine(for: $0))" } ?? "Next up: nothing scheduled")
+        }
+    }
+
+    private var nextEventContent: some View { nextEventContent(now: Date()) }
+
+    @ViewBuilder
+    private func nextEventContent(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("Next event").font(.geist(9)).foregroundStyle(.gray)
-            if calendarManager.calendarAuthorizationStatus == .denied
-                || calendarManager.calendarAuthorizationStatus == .restricted
-            {
+            Text("Next Up").font(.geist(9)).foregroundStyle(.gray)
+            if calendarAccessDenied {
                 Text("Calendar access off").font(.geist(12, .semibold)).foregroundStyle(.primary).lineLimit(1)
                 Button("Open Settings") {
                     if let url = URL(
@@ -1016,10 +1158,11 @@ struct PrototypeHomeView: View {
                 .buttonStyle(.plain)
                 .font(.geist(10))
                 .foregroundStyle(.gray)
-            } else if let event = nextEvent {
+            } else if let event = ProtoCalendarHelpers.nextHighlightEvent(in: calendarManager.events, now: now) {
                 Text(event.title).font(.geist(12, .semibold)).foregroundStyle(.primary).lineLimit(1)
-                Text(ProtoCalendarHelpers.relativeEventSubtitle(for: event))
+                Text(ProtoCalendarHelpers.nextUpLine(for: event, now: now))
                     .font(.geist(10)).foregroundStyle(.primary).lineLimit(1)
+                    .contentTransition(.numericText())
                 let more = ProtoCalendarHelpers.remainingTodayCount(
                     in: calendarManager.events, excluding: event)
                 Text(more == 0 ? "No other events today" : "\(more) more today")
@@ -1029,8 +1172,7 @@ struct PrototypeHomeView: View {
                 Text("Enjoy the free time").font(.geist(10)).foregroundStyle(.gray).lineLimit(1)
             }
         }
-        .frame(width: 150, alignment: .leading)
-        .protoCard()
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

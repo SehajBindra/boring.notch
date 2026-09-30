@@ -171,6 +171,16 @@ extension Defaults.Keys {
     static let autoRemoveShelfItems = Key<Bool>("autoRemoveShelfItems", default: false)
     static let expandedDragDetection = Key<Bool>("expandedDragDetection", default: true)
     
+    // MARK: Home
+    static let quickAccessUsage = Key<[String: [Double]]>("quickAccessUsage", default: [:])
+    static let quickAccessPinned = Key<[String]>("quickAccessPinned", default: [])
+    static let homeShowStatusChips = Key<Bool>("homeShowStatusChips", default: true)
+    static let homeShowCPU = Key<Bool>("homeShowCPU", default: true)
+    static let homeSmartSuggestions = Key<Bool>("homeSmartSuggestions", default: true)
+    static let homeFocusEnabled = Key<Bool>("homeFocusEnabled", default: false)
+    static let focusShortcutName = Key<String>("focusShortcutName", default: "")
+    static let lastHydrationNudge = Key<Date?>("lastHydrationNudge", default: nil)
+
     // MARK: Calendar
     static let calendarSelectionState = Key<CalendarSelectionState>("calendarSelectionState", default: .all)
     static let hideAllDayEvents = Key<Bool>("hideAllDayEvents", default: false)

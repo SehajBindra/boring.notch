@@ -232,12 +232,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleDragEntersNotchRegion(onScreen screen: NSScreen) {
         guard let uuid = screen.displayUUID else { return }
         
+        // Already open on Home: stay there, Home accepts drops and forwards them to Shelf.
         if Defaults[.showOnAllDisplays], let viewModel = viewModels[uuid] {
+            let stayOnHome = viewModel.notchState == .open && coordinator.currentView == .home
             viewModel.open()
-            coordinator.currentView = .shelf
+            if !stayOnHome { coordinator.currentView = .shelf }
         } else if !Defaults[.showOnAllDisplays], let windowScreen = window?.screen, screen == windowScreen {
+            let stayOnHome = vm.notchState == .open && coordinator.currentView == .home
             vm.open()
-            coordinator.currentView = .shelf
+            if !stayOnHome { coordinator.currentView = .shelf }
         }
     }
 
@@ -374,6 +377,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 )
             }
         }
+
+        KeyboardShortcuts.onKeyDown(for: .openQuickLauncher) { [weak self] in
+            guard let self = self else { return }
+            let mouseLocation = NSEvent.mouseLocation
+            var viewModel = self.vm
+            var targetWindow = self.window
+            if Defaults[.showOnAllDisplays],
+               let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }),
+               let uuid = screen.displayUUID, let screenViewModel = self.viewModels[uuid] {
+                viewModel = screenViewModel
+                targetWindow = self.windows[uuid]
+            }
+            self.closeNotchTask?.cancel()
+            self.closeNotchTask = nil
+            if viewModel.notchState == .closed { viewModel.open() }
+            targetWindow?.makeKey()
+            self.coordinator.focusQuickLauncher()
+        }
+
+        KeyboardShortcuts.onKeyDown(for: .focusNotchSearch) { [weak self] in
+            guard let self = self else { return }
+            let mouseLocation = NSEvent.mouseLocation
+            var targetWindow = self.window
+            if Defaults[.showOnAllDisplays],
+               let screen = NSScreen.screens.first(where: { $0.frame.contains(mouseLocation) }),
+               let uuid = screen.displayUUID {
+                targetWindow = self.windows[uuid]
+            }
+            targetWindow?.makeKey()
+            self.coordinator.focusQuickLauncher()
+        }
+        // Registered on open; see BoringViewModel.setNotchOpen.
+        KeyboardShortcuts.disable(.focusNotchSearch)
 
         KeyboardShortcuts.onKeyDown(for: .toggleNotchOpen) { [weak self] in
             Task { [weak self] in

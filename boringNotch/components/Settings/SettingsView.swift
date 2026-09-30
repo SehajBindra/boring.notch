@@ -30,6 +30,9 @@ struct SettingsView: View {
                 NavigationLink(value: "General") {
                     Label("General", systemImage: "gear")
                 }
+                NavigationLink(value: "Home") {
+                    Label("Home", systemImage: "house")
+                }
                 NavigationLink(value: "Appearance") {
                     Label("Appearance", systemImage: "eye")
                 }
@@ -73,6 +76,8 @@ struct SettingsView: View {
                 switch selectedTab {
                 case "General":
                     GeneralSettings()
+                case "Home":
+                    HomeSettings()
                 case "Appearance":
                     Appearance()
                 case "Media":
@@ -909,6 +914,81 @@ struct About: View {
     }
 }
 
+struct HomeSettings: View {
+    @Default(.focusShortcutName) var focusShortcutName: String
+    @ObservedObject private var quickAccess = QuickAccessStore.shared
+
+    var body: some View {
+        Form {
+            Section {
+                Defaults.Toggle(key: .homeShowStatusChips) {
+                    Text("Show status chips")
+                }
+                Defaults.Toggle(key: .homeShowCPU) {
+                    Text("Show CPU usage")
+                }
+                Defaults.Toggle(key: .homeSmartSuggestions) {
+                    Text("Smart suggestions")
+                }
+            } header: {
+                Text("Home")
+            } footer: {
+                Text("Suggestions such as meeting reminders or hydration nudges appear at most once per session.")
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+
+            Section {
+                if quickAccess.pinned.isEmpty {
+                    Text("No pinned features. Right-click a Quick Access tile to pin it.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(quickAccess.pinned, id: \.self) { view in
+                        HStack {
+                            Label(view.protoTitle, systemImage: view.protoIcon)
+                            Spacer()
+                            Button("Unpin") { quickAccess.togglePin(view) }
+                        }
+                    }
+                }
+                Button("Reset Quick Access") { quickAccess.reset() }
+            } header: {
+                Text("Quick Access")
+            } footer: {
+                Text("Tiles fill with the features you use most, favouring recent use. Pinned features always stay.")
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+
+            Section {
+                TextField("Shortcut name", text: $focusShortcutName, prompt: Text("e.g. Toggle Focus"))
+                HStack {
+                    Group {
+                        Button("Test On") { FocusModeManager.shared.runLinkedShortcut(enabled: true) }
+                        Button("Test Off") { FocusModeManager.shared.runLinkedShortcut(enabled: false) }
+                    }
+                    .disabled(focusShortcutName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Spacer()
+                    Button("Open Shortcuts") {
+                        NSWorkspace.shared.open(URL(fileURLWithPath: "/System/Applications/Shortcuts.app"))
+                    }
+                }
+            } header: {
+                Text("Focus")
+            } footer: {
+                Text("Focus always pauses notch interruptions like track-change peeks. To also switch macOS Focus, create a Shortcut that receives text input and runs \"Set Focus\": turn Do Not Disturb on when the input is \"on\" and off when it is \"off\". Then enter its name here.")
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+            }
+        }
+        .accentColor(.effectiveAccent)
+        .navigationTitle("Home")
+    }
+}
+
 struct Shelf: View {
     
     @Default(.shelfTapToOpen) var shelfTapToOpen: Bool
@@ -1739,6 +1819,12 @@ struct Shortcuts: View {
             }
             Section {
                 KeyboardShortcuts.Recorder("Toggle Notch Open:", name: .toggleNotchOpen)
+                KeyboardShortcuts.Recorder("Quick Launcher:", name: .openQuickLauncher)
+            } footer: {
+                Text("Quick Launcher opens the notch with search focused. ⌘K also works while the notch is open.")
+                    .multilineTextAlignment(.trailing)
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
             }
         }
         .accentColor(.effectiveAccent)

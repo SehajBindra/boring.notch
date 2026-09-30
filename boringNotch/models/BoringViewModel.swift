@@ -7,6 +7,7 @@
 
 import Combine
 import Defaults
+import KeyboardShortcuts
 import SwiftUI
 
 class BoringViewModel: NSObject, ObservableObject {
@@ -190,8 +191,12 @@ class BoringViewModel: NSObject, ObservableObject {
     }
 
     func open() {
+        // Already open: keep the auto-fitted height. Resetting to openNotchSize here made
+        // repeat clicks stretch the notch, since the fitted height only updates on content changes.
+        guard notchState != .open else { return }
         self.notchSize = openNotchSize
         self.notchState = .open
+        Self.setNotchOpen(true, for: self)
         
         // Force music information update when notch is opened
         MusicManager.shared.forceUpdate()
@@ -211,6 +216,7 @@ class BoringViewModel: NSObject, ObservableObject {
         self.notchSize = getClosedNotchSize(screenUUID: self.screenUUID)
         self.closedNotchSize = self.notchSize
         self.notchState = .closed
+        Self.setNotchOpen(false, for: self)
         self.isBatteryPopoverActive = false
         self.coordinator.sneakPeek.show = false
         self.edgeAutoOpenActive = false
@@ -221,6 +227,21 @@ class BoringViewModel: NSObject, ObservableObject {
             coordinator.currentView = .shelf
         } else if !coordinator.openLastTabByDefault {
             coordinator.currentView = .home
+        }
+    }
+
+    // ⌘K is registered as a hotkey only while some notch is open, so it doesn't steal ⌘K
+    // from other apps. A SwiftUI keyboardShortcut can't do this: the panel is rarely key.
+    private static var openNotches = Set<ObjectIdentifier>()
+
+    private static func setNotchOpen(_ isOpen: Bool, for vm: BoringViewModel) {
+        let wasAnyOpen = !openNotches.isEmpty
+        if isOpen { openNotches.insert(ObjectIdentifier(vm)) } else { openNotches.remove(ObjectIdentifier(vm)) }
+        guard wasAnyOpen != !openNotches.isEmpty else { return }
+        if openNotches.isEmpty {
+            KeyboardShortcuts.disable(.focusNotchSearch)
+        } else {
+            KeyboardShortcuts.enable(.focusNotchSearch)
         }
     }
 

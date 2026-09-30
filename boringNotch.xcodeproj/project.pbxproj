@@ -7,6 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0FBF5A3530F5C89D987A9820 /* QuickAccessStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 925F076233F8D52AB4E6D2BF /* QuickAccessStore.swift */; };
+		E7D837806CB6EF260B0DACB7 /* SystemStatsMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73094B4242E8F6C1C6DA490D /* SystemStatsMonitor.swift */; };
+		944AB8EB77E43644B6D74583 /* FocusModeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8F89FF9C3D3C2D04B2A6570 /* FocusModeManager.swift */; };
+		2D23C4E657883DD066F71D34 /* HomeSuggestionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0695876EF66B3D1065A5B9BB /* HomeSuggestionEngine.swift */; };
+		3CD42D36D57F311CB6264DCF /* HomeStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83EC6D8914118FCB9D8F5472 /* HomeStyle.swift */; };
+		14F0BB280742E4986673E68E /* HomeQuickAccessRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBBDEC80E89DC4525F459760 /* HomeQuickAccessRow.swift */; };
+		3E549C0DD91FA4D69170A5E4 /* HomeStatusRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6882EDE3B1C0049093AFB450 /* HomeStatusRow.swift */; };
 		24FC0DAF525FE3C5B3C41CBE /* Geist-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 75AC941799345F0154A5626D /* Geist-Bold.ttf */; };
 		085CF9E7DFEB1E6897BA8B5F /* Geist-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 811450B46711F5AF782EBEF3 /* Geist-SemiBold.ttf */; };
 		11B9C9D220FBCDB8A6E1FDC5 /* Geist-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = F83942A75CD25C3E2B8CC991 /* Geist-Medium.ttf */; };
@@ -185,6 +192,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		925F076233F8D52AB4E6D2BF /* QuickAccessStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickAccessStore.swift; sourceTree = "<group>"; };
+		73094B4242E8F6C1C6DA490D /* SystemStatsMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemStatsMonitor.swift; sourceTree = "<group>"; };
+		A8F89FF9C3D3C2D04B2A6570 /* FocusModeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FocusModeManager.swift; sourceTree = "<group>"; };
+		0695876EF66B3D1065A5B9BB /* HomeSuggestionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSuggestionEngine.swift; sourceTree = "<group>"; };
+		83EC6D8914118FCB9D8F5472 /* HomeStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Home/HomeStyle.swift"; sourceTree = "<group>"; };
+		EBBDEC80E89DC4525F459760 /* HomeQuickAccessRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Home/HomeQuickAccessRow.swift"; sourceTree = "<group>"; };
+		6882EDE3B1C0049093AFB450 /* HomeStatusRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Home/HomeStatusRow.swift"; sourceTree = "<group>"; };
 		75AC941799345F0154A5626D /* Geist-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Resources/Fonts/Geist-Bold.ttf"; sourceTree = "<group>"; };
 		811450B46711F5AF782EBEF3 /* Geist-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Resources/Fonts/Geist-SemiBold.ttf"; sourceTree = "<group>"; };
 		F83942A75CD25C3E2B8CC991 /* Geist-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Resources/Fonts/Geist-Medium.ttf"; sourceTree = "<group>"; };
@@ -522,6 +536,10 @@
 				F38DE6472D8243E2008B5C6D /* BatteryActivityManager.swift */,
 				112FB7342CCF16F70015238C /* NotchSpaceManager.swift */,
 				147163992C5D35FF0068B555 /* MusicManager.swift */,
+				925F076233F8D52AB4E6D2BF /* QuickAccessStore.swift */,
+				73094B4242E8F6C1C6DA490D /* SystemStatsMonitor.swift */,
+				A8F89FF9C3D3C2D04B2A6570 /* FocusModeManager.swift */,
+				0695876EF66B3D1065A5B9BB /* HomeSuggestionEngine.swift */,
 				149E0B962C737D00006418B1 /* WebcamManager.swift */,
 				14C08BB52C8DE42D000F8AA0 /* CalendarManager.swift */,
 				B1F0A0012E60000100000001 /* BrightnessManager.swift */,
@@ -720,6 +738,9 @@
 				1160F8D72DD98230006FBB94 /* NotchShape.swift */,
 				9AB0C6BB2C73C9CB00F7CD30 /* NotchHomeView.swift */,
 				14D570C52C5F38210011E668 /* BoringHeader.swift */,
+				83EC6D8914118FCB9D8F5472 /* HomeStyle.swift */,
+				EBBDEC80E89DC4525F459760 /* HomeQuickAccessRow.swift */,
+				6882EDE3B1C0049093AFB450 /* HomeStatusRow.swift */,
 				14D570D12C5F6C6A0011E668 /* BoringExtrasMenu.swift */,
 				1471A8582C6281BD0058408D /* BoringNotchWindow.swift */,
 			);
@@ -969,6 +990,13 @@
 				14C08BC12C8E03AD000F8AA0 /* NSImage+Extensions.swift in Sources */,
 				149E0B9A2C737D40006418B1 /* WebcamView.swift in Sources */,
 				1471639A2C5D35FF0068B555 /* MusicManager.swift in Sources */,
+				0FBF5A3530F5C89D987A9820 /* QuickAccessStore.swift in Sources */,
+				E7D837806CB6EF260B0DACB7 /* SystemStatsMonitor.swift in Sources */,
+				944AB8EB77E43644B6D74583 /* FocusModeManager.swift in Sources */,
+				2D23C4E657883DD066F71D34 /* HomeSuggestionEngine.swift in Sources */,
+				3CD42D36D57F311CB6264DCF /* HomeStyle.swift in Sources */,
+				14F0BB280742E4986673E68E /* HomeQuickAccessRow.swift in Sources */,
+				3E549C0DD91FA4D69170A5E4 /* HomeStatusRow.swift in Sources */,
 				B1B112932C6A577E00093D8F /* MouseTracker.swift in Sources */,
 				B1C448962C9712C4001F0858 /* ActionBar.swift in Sources */,
 				118EBE312E9717DB00D54B5A /* URL+SecurityScoped.swift in Sources */,
